@@ -1,0 +1,100 @@
+name: 'Pemystack Regressor'
+description: 'AI-powered regression detection. Checks every PR against your repo history for known bug patterns.'
+author: 'Pemystack'
+
+branding:
+  icon: 'shield'
+  color: 'orange'
+
+inputs:
+  anthropic_api_key:
+    description: 'Anthropic API key (provide one of: anthropic, openai, or gemini)'
+    required: false
+  openai_api_key:
+    description: 'OpenAI API key'
+    required: false
+  gemini_api_key:
+    description: 'Google Gemini API key'
+    required: false
+  github_token:
+    description: 'GitHub token for posting PR comments and fetching diffs'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate AI key
+      shell: bash
+      run: |
+        if [[ -z "${{ inputs.anthropic_api_key }}" && -z "${{ inputs.openai_api_key }}" && -z "${{ inputs.gemini_api_key }}" ]]; then
+          echo "::error::No AI API key provided. Set one of: anthropic_api_key, openai_api_key, or gemini_api_key"
+          exit 1
+        fi
+
+    - name: Fetch PR diff
+      shell: bash
+      run: gh pr diff "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" > /tmp/regressor-pr.diff
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+
+    - name: Analyze for regressions
+      id: analyze
+      shell: bash
+      run: |
+        RESPONSE=$(curl -sf -X POST "${{ env.PEMYSTACK_API_URL || 'https://pemystack-api.vercel.app' }}/api/analyze" \
+          -H "Content-Type: application/json" \
+          -H "x-api-key: ${{ env.PEMYSTACK_API_SECRET || 'public-action-key' }}" \
+          -d "$(jq -n \
+            --arg diff "$(cat /tmp/regressor-pr.diff | head -c 60000)" \
+            --arg repo "${{ github.repository }}" \
+            --argjson pr_number "${{ github.event.pull_request.number }}" \
+            --argjson is_private "${{ github.event.repository.private }}" \
+            --arg anthropic_key "${{ inputs.anthropic_api_key }}" \
+            --arg openai_key "${{ inputs.openai_api_key }}" \
+            --arg gemini_key "${{ inputs.gemini_api_key }}" \
+            '{
+              diff: $diff,
+              test_inventory: [],
+              framework: "regressor",
+              repo: $repo,
+              pr_number: $pr_number,
+              is_private: $is_private,
+              product: "regressor",
+              anthropic_api_key: (if $anthropic_key != "" then $anthropic_key else null end),
+              openai_api_key: (if $openai_key != "" then $openai_key else null end),
+              gemini_api_key: (if $gemini_key != "" then $gemini_key else null end)
+            }')")
+
+        # Check for errors
+        ERROR=$(echo "$RESPONSE" | jq -r '.error // empty')
+        if [ -n "$ERROR" ]; then
+          COMMENT=$(echo "$RESPONSE" | jq -r '.comment_body // empty')
+          if [ -n "$COMMENT" ]; then
+            gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body "$COMMENT"
+          fi
+          echo "::error::Regressor: $ERROR"
+          exit 1
+        fi
+
+        VERDICT=$(echo "$RESPONSE" | jq -r '.suite_type')
+        RATIONALE=$(echo "$RESPONSE" | jq -r '.rationale')
+        RISK=$(echo "$RESPONSE" | jq -r '.risk_level')
+        UPGRADE=$(echo "$RESPONSE" | jq -r '.upgrade_footer // empty')
+        GAPS=$(echo "$RESPONSE" | jq -r '.coverage_gaps[]? // empty' 2>/dev/null | head -5)
+
+        # Build comment
+        if [ "$VERDICT" = "skip" ]; then
+          COMMENT="## Regression check — no risk detected\n\n$RATIONALE"
+        else
+          EMOJI="✅"
+          [ "$RISK" = "medium" ] && EMOJI="🟡"
+          [ "$RISK" = "high" ] && EMOJI="🔴"
+          COMMENT="## Regression check $EMOJI\n\n**Risk:** $RISK\n\n$RATIONALE"
+          [ -n "$GAPS" ] && COMMENT+="\n\n**Areas to watch:**\n$(echo "$GAPS" | sed 's/^/- /')"
+        fi
+
+        [ -n "$UPGRADE" ] && COMMENT+="\n\n$UPGRADE"
+
+        echo -e "$COMMENT" | gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body-file -
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
