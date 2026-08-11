@@ -41,9 +41,9 @@ runs:
       id: analyze
       shell: bash
       run: |
-        RESPONSE=$(curl -sf -X POST "${{ env.PEMYSTACK_API_URL || 'https://pemystack-api.vercel.app' }}/api/analyze" \
+        RESPONSE=$(curl -s -X POST "https://api.pemystack.com/api/analyze" \
           -H "Content-Type: application/json" \
-          -H "x-api-key: ${{ env.PEMYSTACK_API_SECRET || 'public-action-key' }}" \
+          -H "x-api-key: public-action-v1" \
           -d "$(jq -n \
             --arg diff "$(cat /tmp/regressor-pr.diff | head -c 60000)" \
             --arg repo "${{ github.repository }}" \
