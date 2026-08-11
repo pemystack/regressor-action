@@ -70,7 +70,7 @@ runs:
         if [ -n "$ERROR" ]; then
           COMMENT=$(echo "$RESPONSE" | jq -r '.comment_body // empty')
           if [ -n "$COMMENT" ]; then
-            gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body "$COMMENT"
+            echo "$COMMENT" | bash "${{ github.action_path }}/comment.sh" "${{ github.event.pull_request.number }}" "${{ github.repository }}" "<!-- regressor-agent -->"
           fi
           echo "::error::Regressor: $ERROR"
           exit 1
@@ -95,6 +95,6 @@ runs:
 
         [ -n "$UPGRADE" ] && COMMENT+="\n\n$UPGRADE"
 
-        echo -e "$COMMENT" | gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body-file -
+        echo -e "$COMMENT" | bash "${{ github.action_path }}/comment.sh" "${{ github.event.pull_request.number }}" "${{ github.repository }}" "<!-- regressor-agent -->"
       env:
         GH_TOKEN: ${{ inputs.github_token }}
