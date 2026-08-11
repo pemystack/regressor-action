@@ -42,9 +42,8 @@ Works with any language — risk analysis is based on code change patterns, not 
 ## Free plan
 
 - 20 reviews/month
-- Public repos
 - Basic risk analysis
-- [Upgrade to Pro](https://github.com/marketplace/pemystack) for unlimited reviews and private repos
+- [Upgrade to Pro](https://github.com/marketplace/pemystack) for unlimited reviews, full analysis, and Slack alerts
 
 ## Inputs
 
