@@ -43,7 +43,7 @@ Works with any language — risk analysis is based on code change patterns, not 
 
 - 20 reviews/month
 - Basic risk analysis
-- [Upgrade to Pro](https://github.com/marketplace/pemystack) for unlimited reviews, full analysis, and Slack alerts
+- [Upgrade to Pro](https://github.com/marketplace/pemystack-pr-agent) for unlimited reviews, full analysis, and Slack alerts
 
 ## Inputs
 
